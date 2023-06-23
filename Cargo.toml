@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "climsg-client",
+    "climsg-server",
+    "climsg-core",
+]
+
+resolver = "2"
