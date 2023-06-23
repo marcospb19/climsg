@@ -1,17 +1,12 @@
-use std::{
-    io::Write,
-    os::unix::net::{UnixListener, UnixStream},
-    thread,
-    time::Duration,
-};
+use std::{thread, time::Duration};
 
 use flume::{Receiver, Sender};
+use zbus::blocking::Connection;
 
-fn run_message_generator(sender: Sender<String>) {
-    for i in 0..u64::MAX {
+fn run_message_generator(sender: Sender<i32>) {
+    for i in 0..i32::MAX {
         thread::sleep(Duration::from_secs(1));
-        let msg = format!("Message {i}");
-        sender.send(msg).unwrap();
+        sender.send(i).unwrap();
     }
 }
 
@@ -19,25 +14,28 @@ fn main() {
     let (tx, rx) = flume::unbounded();
 
     thread::spawn(|| run_message_generator(tx));
-    listen_to_connections(rx);
+    send_signals(rx);
 }
 
-fn listen_to_connections(receiver: Receiver<String>) {
-    let listener = UnixListener::bind("/tmp/climsg").unwrap();
-
-    for stream in listener.incoming() {
-        let receiver = receiver.clone();
-        thread::spawn(move || handle_connection(stream.unwrap(), receiver.clone()));
-    }
-}
-
-fn handle_connection(mut stream: UnixStream, receiver: Receiver<String>) {
-    // Resubscribe to skip queued messages
-    let receiver = receiver.clone();
+fn send_signals(receiver: Receiver<i32>) {
+    let connection = Connection::session().unwrap();
 
     loop {
-        let msg = receiver.recv().unwrap();
-        println!("Sending message {msg}");
-        stream.write(msg.as_bytes()).unwrap();
+        let msg_number = receiver.recv().unwrap();
+        let msg_body = format!("climsg-msg-body-{msg_number}");
+
+        println!("Sending message {msg_body}");
+
+        let result = connection
+            .emit_signal(
+                Some("climsg.client.listener"),
+                "/climsg_object_path",
+                "climsg.interface",
+                "climsg_signal_name",
+                &msg_body,
+            )
+            .expect("Failed to send message");
+
+        dbg!(result);
     }
 }

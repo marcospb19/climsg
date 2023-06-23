@@ -1,13 +1,11 @@
-use std::{io::Read, os::unix::net::UnixStream};
+use zbus::blocking::{Connection, MessageIterator};
 
 fn main() {
-    let mut listener = UnixStream::connect("/tmp/climsg").unwrap();
+    let connection = Connection::session().unwrap();
+    connection.request_name("climsg.client.listener").unwrap();
 
-    loop {
-        let mut buf = [0; 128];
-        let bytes = listener.read(&mut buf).unwrap();
-
-        let msg = String::from_utf8_lossy(&buf[..bytes]);
-        println!("received message: {msg}");
+    let iter = MessageIterator::from(connection);
+    for msg in iter {
+        println!("Got message: {}", msg.unwrap());
     }
 }
