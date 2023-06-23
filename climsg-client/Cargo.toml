@@ -1,0 +1,9 @@
+[package]
+name = "climsg-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+climsg-core = { path = "../climsg-core" }
+
+flume = "0.10.14"
