@@ -1,23 +1,31 @@
 use std::os::unix::net::UnixStream;
 
+use clap::Parser;
 use climsg_core::{ClientMessage, MessageStream, ServerMessage, SERVER_SOCKET_FILE};
 
-fn main() {
-    let arg = std::env::args().nth(1).expect("Expected one argument");
+#[derive(Parser)]
+#[command(about, version)]
+enum ArgCommand {
+    #[command(visible_alias = "s")]
+    Send { key: String, value: String },
+    #[command(visible_alias = "l")]
+    Listen { key: String },
+}
 
-    let stream = UnixStream::connect(SERVER_SOCKET_FILE).unwrap();
+fn main() {
+    let command = ArgCommand::parse();
+
+    let stream = UnixStream::connect(SERVER_SOCKET_FILE).expect("FAILED TO CONNECT TO SERVER, IS IT RUNNING?");
     let mut stream = MessageStream::new(stream);
 
-    let key = "key";
-
-    match arg.as_str() {
-        "send" => {
-            let message = ClientMessage::SendSignal(key.to_string(), "message-contents-example".into());
+    match command {
+        ArgCommand::Send { key, value } => {
+            let message = ClientMessage::SendSignal(key, value);
             let message = serde_json::to_string(&message).unwrap();
             stream.send(message).unwrap();
         }
-        "listen" => {
-            let message = ClientMessage::Listen(key.to_string());
+        ArgCommand::Listen { key } => {
+            let message = ClientMessage::Listen(key.clone());
             let message = serde_json::to_string(&message).unwrap();
             stream.send(message).unwrap();
 
@@ -28,6 +36,5 @@ fn main() {
                 println!("received message for {key}: '{message:?}'.");
             }
         }
-        _ => unreachable!("Unexpected argument"),
-    }
+    };
 }
