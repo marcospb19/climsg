@@ -1,45 +1,50 @@
 use std::{
-    io::Write,
-    os::unix::net::{UnixListener, UnixStream},
+    collections::HashMap,
+    os::unix::net::UnixListener,
+    sync::{Arc, Mutex},
     thread,
-    time::Duration,
 };
 
-use climsg_core::SERVER_SOCKET_FILE;
-use flume::{Receiver, Sender};
+use async_io::block_on;
+use climsg_core::{ClientMessage, MessageStream, ServerMessage, SERVER_SOCKET_FILE};
+use dashmap::DashMap;
+use tokio::sync::broadcast;
 
-fn run_message_generator(sender: Sender<String>) {
-    for i in 0..u64::MAX {
-        thread::sleep(Duration::from_secs(1));
-        let msg = format!("Message {i}");
-        sender.send(msg).unwrap();
-    }
-}
+type BroadcastChannels = Arc<DashMap<String, broadcast::Sender<String>>>;
 
 fn main() {
-    let (tx, rx) = flume::unbounded();
+    let broadcast_channels: BroadcastChannels = DashMap::new().into();
 
-    thread::spawn(|| run_message_generator(tx));
-    listen_to_connections(rx);
-}
-
-fn listen_to_connections(receiver: Receiver<String>) {
     std::fs::remove_file(SERVER_SOCKET_FILE).unwrap();
     let listener = UnixListener::bind(SERVER_SOCKET_FILE).unwrap();
 
     for stream in listener.incoming() {
-        let receiver = receiver.clone();
-        thread::spawn(move || handle_connection(stream.unwrap(), receiver));
+        let stream = MessageStream::new(stream.unwrap());
+        let broadcast_channels = broadcast_channels.clone();
+        let stream = thread::spawn(|| handle_connection(stream, broadcast_channels));
     }
 }
 
-fn handle_connection(mut stream: UnixStream, receiver: Receiver<String>) {
-    // Resubscribe to skip queued messages
-    let receiver = receiver;
+fn handle_connection(mut stream: MessageStream, broadcast_channels: BroadcastChannels) {
+    let msg = stream.receive().unwrap();
+    let msg = std::str::from_utf8(&msg).unwrap();
+    let msg = serde_json::from_str(msg).unwrap();
 
-    loop {
-        let msg = receiver.recv().unwrap();
-        println!("Sending message {msg}");
-        stream.write_all(msg.as_bytes()).unwrap();
+    match msg {
+        ClientMessage::Listen(key) => {
+            let new_broadcast = || broadcast::channel(128).0;
+
+            let mut receiver = broadcast_channels.entry(key).or_insert_with(new_broadcast).subscribe();
+
+            while let Ok(msg) = block_on(receiver.recv()) {
+                let msg = ServerMessage::Signal(msg);
+                let msg = serde_json::to_string(&msg).unwrap();
+                stream.send(msg).unwrap();
+            }
+        }
+        ClientMessage::SendSignal(key, body) => {
+            let Some(sender) = broadcast_channels.get(&key) else { return; };
+            sender.send(body).unwrap();
+        }
     }
 }

@@ -1,20 +1,33 @@
-use std::{io::Read, os::unix::net::UnixStream};
+use std::os::unix::net::UnixStream;
 
-use climsg_core::SERVER_SOCKET_FILE;
+use climsg_core::{ClientMessage, MessageStream, ServerMessage, SERVER_SOCKET_FILE};
 
 fn main() {
-    let mut listener = UnixStream::connect(SERVER_SOCKET_FILE).unwrap();
+    let arg = std::env::args().nth(1).expect("Expected one argument");
 
-    loop {
-        let mut buf = [0; 128];
-        let bytes = listener.read(&mut buf).unwrap();
+    let stream = UnixStream::connect(SERVER_SOCKET_FILE).unwrap();
+    let mut stream = MessageStream::new(stream);
 
-        if bytes == 0 {
-            println!("received empty message, exiting");
-            break;
+    let key = "key";
+
+    match arg.as_str() {
+        "send" => {
+            let message = ClientMessage::SendSignal(key.to_string(), "message-contents-example".into());
+            let message = serde_json::to_string(&message).unwrap();
+            stream.send(message).unwrap();
         }
+        "listen" => {
+            let message = ClientMessage::Listen(key.to_string());
+            let message = serde_json::to_string(&message).unwrap();
+            stream.send(message).unwrap();
 
-        let msg = String::from_utf8_lossy(&buf[..bytes]);
-        println!("received message: {msg}");
+            loop {
+                let message = stream.receive().unwrap();
+                let message = std::str::from_utf8(&message).unwrap();
+                let message = serde_json::from_str::<ServerMessage>(message).unwrap();
+                println!("received message for {key}: '{message:?}'.");
+            }
+        }
+        _ => unreachable!("Unexpected argument"),
     }
 }
