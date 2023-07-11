@@ -1,7 +1,5 @@
-use std::os::unix::net::UnixStream;
-
 use clap::Parser;
-use climsg_core::{ClientMessage, MessageStream, ServerMessage, SERVER_SOCKET_FILE};
+use climsg_core::{ClientMessage, MessageStream, ServerMessage};
 
 #[derive(Parser)]
 #[command(about, version)]
@@ -15,8 +13,7 @@ enum ArgCommand {
 fn main() {
     let command = ArgCommand::parse();
 
-    let stream = UnixStream::connect(SERVER_SOCKET_FILE).expect("FAILED TO CONNECT TO SERVER, IS IT RUNNING?");
-    let mut stream = MessageStream::new(stream);
+    let mut stream = MessageStream::connect_to_default().expect("Failed to connect to server, is it running?");
 
     match command {
         ArgCommand::Send { key, value } => {

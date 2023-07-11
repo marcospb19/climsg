@@ -1,12 +1,7 @@
-use std::{
-    collections::HashMap,
-    os::unix::net::UnixListener,
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::{os::unix::net::UnixListener, sync::Arc, thread};
 
 use async_io::block_on;
-use climsg_core::{ClientMessage, MessageStream, ServerMessage, SERVER_SOCKET_FILE};
+use climsg_core::{ClientMessage, MessageStream, ServerMessage, DEFAULT_SERVER_SOCKET_PATH};
 use dashmap::DashMap;
 use tokio::sync::broadcast;
 
@@ -15,13 +10,13 @@ type BroadcastChannels = Arc<DashMap<String, broadcast::Sender<String>>>;
 fn main() {
     let broadcast_channels: BroadcastChannels = DashMap::new().into();
 
-    std::fs::remove_file(SERVER_SOCKET_FILE).unwrap();
-    let listener = UnixListener::bind(SERVER_SOCKET_FILE).unwrap();
+    std::fs::remove_file(DEFAULT_SERVER_SOCKET_PATH).unwrap();
+    let listener = UnixListener::bind(DEFAULT_SERVER_SOCKET_PATH).unwrap();
 
     for stream in listener.incoming() {
-        let stream = MessageStream::new(stream.unwrap());
+        let stream = stream.unwrap().into();
         let broadcast_channels = broadcast_channels.clone();
-        let stream = thread::spawn(|| handle_connection(stream, broadcast_channels));
+        thread::spawn(|| handle_connection(stream, broadcast_channels));
     }
 }
 
@@ -43,7 +38,9 @@ fn handle_connection(mut stream: MessageStream, broadcast_channels: BroadcastCha
             }
         }
         ClientMessage::SendSignal(key, body) => {
-            let Some(sender) = broadcast_channels.get(&key) else { return; };
+            let Some(sender) = broadcast_channels.get(&key) else {
+                return;
+            };
             sender.send(body).unwrap();
         }
     }

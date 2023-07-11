@@ -2,11 +2,12 @@ use std::{
     io,
     io::{Read, Write},
     os::unix::net::UnixStream,
+    path::Path,
 };
 
 use serde::{Deserialize, Serialize};
 
-pub const SERVER_SOCKET_FILE: &str = "/tmp/climsg";
+pub const DEFAULT_SERVER_SOCKET_PATH: &str = "/tmp/climsg-default-server";
 
 // Fuck Around 'n Find 0ut
 pub const ACKNOWLEDGE_REQUEST_CODE: &[u8] = &0x0000faf0_u32.to_be_bytes();
@@ -17,9 +18,19 @@ pub struct MessageStream {
     socket: UnixStream,
 }
 
-impl MessageStream {
-    pub fn new(socket: UnixStream) -> Self {
+impl From<UnixStream> for MessageStream {
+    fn from(socket: UnixStream) -> Self {
         Self { socket }
+    }
+}
+
+impl MessageStream {
+    pub fn connect_to(path: impl AsRef<Path>) -> io::Result<Self> {
+        UnixStream::connect(path.as_ref()).map(|socket| Self { socket })
+    }
+
+    pub fn connect_to_default() -> io::Result<Self> {
+        Self::connect_to(DEFAULT_SERVER_SOCKET_PATH)
     }
 
     pub fn send(&mut self, message: String) -> io::Result<()> {
@@ -35,7 +46,9 @@ impl MessageStream {
         self.socket.read_exact(&mut message_length).unwrap();
 
         let length = u64::from_be_bytes(message_length);
-        let Ok(length) = usize::try_from(length) else { panic!("32-bit system does not support huge messages") };
+        let Ok(length) = usize::try_from(length) else {
+            panic!("32-bit system does not support huge messages")
+        };
 
         let mut buf = vec![0; length];
         self.socket.read_exact(&mut buf)?;
