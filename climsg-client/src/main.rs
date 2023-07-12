@@ -18,19 +18,17 @@ fn main() {
     match command {
         ArgCommand::Send { key, value } => {
             let message = ClientMessage::SendSignal(key, value);
-            let message = serde_json::to_string(&message).unwrap();
             stream.send(message).unwrap();
         }
         ArgCommand::Listen { key } => {
             let message = ClientMessage::Listen(key.clone());
-            let message = serde_json::to_string(&message).unwrap();
             stream.send(message).unwrap();
 
             loop {
                 let message = stream.receive().unwrap();
                 let message = std::str::from_utf8(&message).unwrap();
                 let message = serde_json::from_str::<ServerMessage>(message).unwrap();
-                println!("received message for {key}: '{message:?}'.");
+                println!("Received message for {key}: '{message:?}'.");
             }
         }
     };

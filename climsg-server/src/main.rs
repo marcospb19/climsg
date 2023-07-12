@@ -32,16 +32,13 @@ fn handle_connection(mut stream: MessageStream, broadcast_channels: BroadcastCha
             let mut receiver = broadcast_channels.entry(key).or_insert_with(new_broadcast).subscribe();
 
             while let Ok(msg) = block_on(receiver.recv()) {
-                let msg = ServerMessage::Signal(msg);
-                let msg = serde_json::to_string(&msg).unwrap();
-                stream.send(msg).unwrap();
+                stream.send(ServerMessage::Signal(msg)).unwrap();
             }
         }
         ClientMessage::SendSignal(key, body) => {
-            let Some(sender) = broadcast_channels.get(&key) else {
-                return;
-            };
-            sender.send(body).unwrap();
+            if let Some(sender) = broadcast_channels.get(&key) {
+                sender.send(body).unwrap();
+            }
         }
     }
 }
