@@ -48,7 +48,7 @@ impl MessageStream {
 
     pub fn receive(&mut self) -> Result<Vec<u8>> {
         let mut message_length = [0; 8];
-        self.socket.read_exact(&mut message_length)?;
+        self.socket.read_exact(&mut message_length).unwrap();
 
         let length = u64::from_be_bytes(message_length);
         let Ok(length) = usize::try_from(length) else {
@@ -56,10 +56,10 @@ impl MessageStream {
         };
 
         let mut buf = vec![0; length];
-        self.socket.read_exact(&mut buf)?;
+        self.socket.read_exact(&mut buf).unwrap();
 
         // Acknowledge the reading
-        self.send_acknowledgement()?;
+        self.send_acknowledgement().unwrap();
         Ok(buf)
     }
 
@@ -80,14 +80,13 @@ impl MessageStream {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ServerMessage {
-    Signal(String),
-}
+pub struct ServerMessage(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
     Listen(String),
     SendSignal(String, String),
+    Close,
 }
 
 /// Types that are allowed to be send over climsg.

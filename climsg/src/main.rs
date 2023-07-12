@@ -28,8 +28,11 @@ fn main() {
                 let message = stream.receive().unwrap();
                 let message = std::str::from_utf8(&message).unwrap();
                 let message = serde_json::from_str::<ServerMessage>(message).unwrap();
-                println!("Received message for {key}: '{message:?}'.");
+
+                println!("{}", message.0);
             }
         }
-    };
+    }
+
+    stream.send(ClientMessage::Close).unwrap();
 }

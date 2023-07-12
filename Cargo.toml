@@ -1,7 +1,7 @@
 [workspace]
 members = [
-    "climsg-client",
-    "climsg-server",
+    "climsg",
+    "climsgd",
     "climsg-core",
 ]
 
