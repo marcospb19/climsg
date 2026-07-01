@@ -10,6 +10,8 @@ enum ArgCommand {
     Listen {
         #[arg(required = true)]
         key: Vec<String>,
+        #[arg(short = 'C', long = "print-channel")]
+        print_channel: bool,
     },
 }
 
@@ -23,7 +25,7 @@ fn main() {
             let message = ClientMessage::SendSignal(key, value);
             stream.send(message).unwrap();
         }
-        ArgCommand::Listen { key } => {
+        ArgCommand::Listen { key, print_channel } => {
             let message = ClientMessage::Listen(key.clone());
             stream.send(message).unwrap();
 
@@ -32,7 +34,11 @@ fn main() {
                 let message = std::str::from_utf8(&message).unwrap();
                 let message = serde_json::from_str::<ServerMessage>(message).unwrap();
 
-                println!("{}: {}", message.channel, message.body);
+                if print_channel {
+                    println!("{}: {}", message.channel, message.body);
+                } else {
+                    println!("{}", message.body);
+                }
             }
         }
     }
