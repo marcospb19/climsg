@@ -80,11 +80,14 @@ impl MessageStream {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerMessage(pub String);
+pub struct ServerMessage {
+    pub channel: String,
+    pub body: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Listen(String),
+    Listen(Vec<String>),
     SendSignal(String, String),
     Close,
 }
