@@ -5,6 +5,7 @@ use climsg_core::{ClientMessage, MessageStream, ServerMessage, DEFAULT_SERVER_SO
 use dashmap::DashMap;
 use futures::{stream, StreamExt};
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 // optimization TODO: do manual reference-counting to de-allocate senders as listeners go away
 type BroadcastChannels = Arc<DashMap<String, broadcast::Sender<String>>>;
@@ -30,7 +31,7 @@ fn handle_connection(mut stream: MessageStream, broadcast_channels: BroadcastCha
 
         match msg {
             ClientMessage::Listen(keys) => {
-                let new_sender = || broadcast::channel(128).0;
+                let new_sender = || broadcast::channel(1024).0;
 
                 let streams = keys.into_iter().map(|key| {
                     let receiver = broadcast_channels
@@ -38,9 +39,13 @@ fn handle_connection(mut stream: MessageStream, broadcast_channels: BroadcastCha
                         .or_insert_with(new_sender)
                         .subscribe();
 
-                    Box::pin(stream::unfold((receiver, key), |(mut rx, key)| async move {
-                        rx.recv().await.ok().map(|msg| ((key.clone(), msg), (rx, key)))
-                    }))
+                    let key = Arc::new(key);
+                    BroadcastStream::new(receiver)
+                        .filter_map(move |result| {
+                            let key = key.clone();
+                            async move { result.ok().map(|msg| ((*key).clone(), msg)) }
+                        })
+                        .boxed()
                 });
 
                 let mut merged = stream::select_all(streams);
